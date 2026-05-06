@@ -23,7 +23,10 @@ jobs:
           submodules: recursive
 
       - name: Set up Rust (stable)
-        run: rustup target add wasm32-unknown-unknown
+        run: |
+          rustup update stable
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
 
       - uses: Swatinem/rust-cache@v2
         with:
