@@ -32,10 +32,10 @@ jobs:
             rust-pack
             vendor/rust-analyzer
 
-      - name: Install wasm-bindgen-cli and just
+      - name: Install wasm-bindgen-cli, just, binaryen
         uses: taiki-e/install-action@v2
         with:
-          tool: wasm-bindgen-cli,just
+          tool: wasm-bindgen-cli,just,binaryen
 
       - uses: actions/setup-node@v6
         with:
@@ -48,7 +48,10 @@ jobs:
         run: just prepare
 
       - name: Build sysroot, wasm, and web bundle
-        run: just sysroot wasm deps web
+        run: just sysroot wasm wasm-opt deps web
+
+      - name: Headless smoke test
+        run: just smoke
 
       - name: Deploy to gh-pages branch
         run: |

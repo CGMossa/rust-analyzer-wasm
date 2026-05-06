@@ -1,0 +1,17 @@
+{
+  "name": "ra-wasm-headless-tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Puppeteer smoke tests for the rust-analyzer-wasm playground.",
+  "scripts": {
+    "smoke": "node probe-completions.js",
+    "boot": "node probe.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "puppeteer": "^24.43.0"
+  }
+}

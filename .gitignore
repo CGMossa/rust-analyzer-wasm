@@ -5,3 +5,4 @@ target/
 ra-wasm/pkg/
 www/dist/
 www/node_modules/
+tests/headless/node_modules/

@@ -32,6 +32,22 @@ wasm:
         --out-dir ra-wasm/pkg --out-name wasm_demo \
         ra-wasm/target/wasm32-unknown-unknown/release/wasm_demo.wasm
 
+# Shrink the wasm-bindgen output with binaryen's wasm-opt (~30% reduction).
+# Skipped silently if wasm-opt isn't installed — keeps local dev cheap.
+wasm-opt:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v wasm-opt >/dev/null 2>&1; then
+        echo "wasm-opt not found, skipping (install binaryen for production builds)"
+        exit 0
+    fi
+    SRC=ra-wasm/pkg/wasm_demo_bg.wasm
+    BEFORE=$(wc -c <"$SRC")
+    wasm-opt -Oz -all "$SRC" -o "$SRC.opt"
+    mv "$SRC.opt" "$SRC"
+    AFTER=$(wc -c <"$SRC")
+    awk -v b="$BEFORE" -v a="$AFTER" 'BEGIN { printf "wasm-opt: %.1f MB → %.1f MB (-%.0f%%)\n", b/1048576, a/1048576, (1-a/b)*100 }'
+
 # Install npm dependencies for the www/ frontend
 deps:
     npm --prefix www ci
@@ -40,8 +56,8 @@ deps:
 web:
     npm --prefix www run build
 
-# Full production build: prepare → sysroot → wasm → deps → web
-build: prepare sysroot wasm deps web
+# Full production build: prepare → sysroot → wasm → wasm-opt → deps → web
+build: prepare sysroot wasm wasm-opt deps web
 
 # ── Development ──────────────────────────────────────────────────────────────
 
@@ -118,6 +134,29 @@ wasm-size:
 # Audit Cargo dependencies for known vulnerabilities
 audit:
     cargo audit --manifest-path ra-wasm/Cargo.toml
+
+# Headless smoke test: serves www/dist on :8090 and runs the completions
+# probe against it. Requires www/dist already built and python3.
+smoke:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f www/dist/index.html ]; then
+        echo "www/dist/index.html not found — run 'just web' first." >&2
+        exit 1
+    fi
+    npm --prefix tests/headless ci
+    python3 -m http.server -d www/dist 8090 >/tmp/smoke-http.log 2>&1 &
+    SERVER_PID=$!
+    trap "kill $SERVER_PID 2>/dev/null || true" EXIT
+    for _ in $(seq 1 50); do
+        curl -fs http://127.0.0.1:8090/ >/dev/null && break
+        sleep 0.2
+    done
+    node tests/headless/probe-completions.js http://127.0.0.1:8090/
+
+# Update tests/headless/node_modules with the lockfile.
+smoke-deps:
+    npm --prefix tests/headless ci
 
 # ── Clean ─────────────────────────────────────────────────────────────────────
 
