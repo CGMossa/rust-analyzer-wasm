@@ -1,5 +1,13 @@
 [target.wasm32-unknown-unknown]
-rustflags = ["-C", "target-feature=+atomics,+bulk-memory,+mutable-globals"]
+# `--cfg=no_salsa_async_drops` switches off the std::thread::spawn-based
+# Drop impls in syntax/Parse, span/ast_id, span/map. Threads aren't
+# supported on wasm32-unknown-unknown, so without this flag every drop
+# panics, leaves salsa's thread-local DB pointer half-set, and every
+# subsequent query trips "Cannot change database mid-query".
+rustflags = [
+    "-C", "target-feature=+bulk-memory,+mutable-globals",
+    "--cfg=no_salsa_async_drops",
+]
 
 [unstable]
 build-std = ["panic_abort", "std"]

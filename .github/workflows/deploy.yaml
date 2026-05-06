@@ -24,10 +24,6 @@ jobs:
         run: |
           rustup update stable
           rustup default stable
-          rustup target add wasm32-unknown-unknown
-          rustup component add rust-src
-          # rust-pack reads the source of std/core/alloc out of the sysroot
-          rustc --print sysroot
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -36,31 +32,23 @@ jobs:
             rust-pack
             vendor/rust-analyzer
 
-      - name: Install wasm-bindgen-cli
+      - name: Install wasm-bindgen-cli and just
         uses: taiki-e/install-action@v2
         with:
-          tool: wasm-bindgen-cli
-
-      - name: Generate fake sysroot
-        working-directory: rust-pack
-        run: cargo run --release
-
-      - name: Build wasm (release)
-        working-directory: ra-wasm
-        run: |
-          cargo build --target wasm32-unknown-unknown --release
-          wasm-bindgen --target web --out-dir pkg --out-name wasm_demo \
-            target/wasm32-unknown-unknown/release/wasm_demo.wasm
+          tool: wasm-bindgen-cli,just
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
 
-      - name: Build site
-        working-directory: www
-        run: |
-          npm ci
-          npm run build
+      - name: Setup Rust wasm target + rust-src
+        run: just setup
+
+      - name: Apply wasm patches
+        run: just prepare
+
+      - name: Build sysroot, wasm, and web bundle
+        run: just sysroot wasm deps web
 
       - name: Deploy to gh-pages branch
         run: |

@@ -1,0 +1,279 @@
+From 8a79b99944e9f666b07f6c2a4b137c6378fd6d9b Mon Sep 17 00:00:00 2001
+From: Mossa <cgmossa@gmail.com>
+Date: Wed, 6 May 2026 19:20:23 +0200
+Subject: [PATCH] Make rust-analyzer compile for wasm32-unknown-unknown
+
+The native build is unaffected. Two target-specific changes are needed
+to get the workspace through `cargo check`/`cargo build`:
+
+- `home` (transitively pulled in via `toolchain`) only supports Unix and
+  Windows. Move it under a `cfg(not(wasm32-unknown-unknown))` target
+  table and have `get_cargo_home()` return `None` on wasm.
+- `url::Url::{from_file_path, to_file_path}` are unavailable on
+  `wasm32-unknown-unknown`. Add a small `WasmFileUrlExt` trait in
+  `crates/rust-analyzer/src/lsp/wasm_file_url.rs` that provides a
+  faithful `file://` encoder/decoder for the wasm target, and import
+  it at the existing call sites under the same `cfg`.
+
+This produces a working `target/wasm32-unknown-unknown/release/
+librust_analyzer.rlib`, which is what the .rust-analyzer-wasm demo
+links against.
+
+AI-assisted: drafted with Claude (Anthropic) and reviewed by hand;
+disclosed per CONTRIBUTING.md.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+---
+ crates/rust-analyzer/src/bin/main.rs          |  3 +
+ crates/rust-analyzer/src/cli/lsif.rs          |  2 +
+ .../src/handlers/notification.rs              |  2 +
+ crates/rust-analyzer/src/handlers/request.rs  |  2 +
+ crates/rust-analyzer/src/lsp.rs               |  3 +
+ crates/rust-analyzer/src/lsp/from_proto.rs    |  2 +
+ crates/rust-analyzer/src/lsp/to_proto.rs      |  2 +
+ crates/rust-analyzer/src/lsp/wasm_file_url.rs | 82 +++++++++++++++++++
+ crates/rust-analyzer/src/reload.rs            |  2 +
+ crates/toolchain/Cargo.toml                   |  4 +-
+ crates/toolchain/src/lib.rs                   | 12 ++-
+ 11 files changed, 112 insertions(+), 4 deletions(-)
+ create mode 100644 crates/rust-analyzer/src/lsp/wasm_file_url.rs
+
+diff --git a/crates/rust-analyzer/src/bin/main.rs b/crates/rust-analyzer/src/bin/main.rs
+index 44c442ffd8..1f3d971f7a 100644
+--- a/crates/rust-analyzer/src/bin/main.rs
++++ b/crates/rust-analyzer/src/bin/main.rs
+@@ -23,6 +23,9 @@ use rust_analyzer::{
+ use tracing_subscriber::fmt::writer::BoxMakeWriter;
+ use vfs::AbsPathBuf;
+ 
++#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++use rust_analyzer::lsp::wasm_file_url::WasmFileUrlExt as _;
++
+ #[cfg(feature = "mimalloc")]
+ #[global_allocator]
+ static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+diff --git a/crates/rust-analyzer/src/cli/lsif.rs b/crates/rust-analyzer/src/cli/lsif.rs
+index 4f6de6850a..8ddf5504a8 100644
+--- a/crates/rust-analyzer/src/cli/lsif.rs
++++ b/crates/rust-analyzer/src/cli/lsif.rs
+@@ -16,6 +16,8 @@ use rustc_hash::FxHashMap;
+ use stdx::format_to;
+ use vfs::{AbsPathBuf, Vfs};
+ 
++#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++use crate::lsp::wasm_file_url::WasmFileUrlExt as _;
+ use crate::{
+     cli::flags,
+     line_index::{LineEndings, LineIndex, PositionEncoding},
+diff --git a/crates/rust-analyzer/src/handlers/notification.rs b/crates/rust-analyzer/src/handlers/notification.rs
+index 09b6794e4f..cba74fb222 100644
+--- a/crates/rust-analyzer/src/handlers/notification.rs
++++ b/crates/rust-analyzer/src/handlers/notification.rs
+@@ -16,6 +16,8 @@ use paths::Utf8PathBuf;
+ use triomphe::Arc;
+ use vfs::{AbsPathBuf, ChangeKind, VfsPath};
+ 
++#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++use crate::lsp::wasm_file_url::WasmFileUrlExt as _;
+ use crate::{
+     config::{Config, ConfigChange},
+     flycheck::{InvocationStrategy, PackageSpecifier, Target},
+diff --git a/crates/rust-analyzer/src/handlers/request.rs b/crates/rust-analyzer/src/handlers/request.rs
+index 0c1c067ffa..c42f1bf0cf 100644
+--- a/crates/rust-analyzer/src/handlers/request.rs
++++ b/crates/rust-analyzer/src/handlers/request.rs
+@@ -32,6 +32,8 @@ use syntax::{TextRange, TextSize};
+ use triomphe::Arc;
+ use vfs::{AbsPath, AbsPathBuf, FileId, VfsPath};
+ 
++#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++use crate::lsp::wasm_file_url::WasmFileUrlExt as _;
+ use crate::{
+     config::{
+         ClientCommandsConfig, Config, HoverActionsConfig, RustfmtConfig, WorkspaceSymbolConfig,
+diff --git a/crates/rust-analyzer/src/lsp.rs b/crates/rust-analyzer/src/lsp.rs
+index a6a35dadd9..be3ba68f6d 100644
+--- a/crates/rust-analyzer/src/lsp.rs
++++ b/crates/rust-analyzer/src/lsp.rs
+@@ -13,6 +13,9 @@ pub(crate) mod from_proto;
+ pub(crate) mod semantic_tokens;
+ pub(crate) mod to_proto;
+ pub(crate) mod utils;
++#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++#[doc(hidden)]
++pub mod wasm_file_url;
+ 
+ #[derive(Debug)]
+ pub(crate) struct LspError {
+diff --git a/crates/rust-analyzer/src/lsp/from_proto.rs b/crates/rust-analyzer/src/lsp/from_proto.rs
+index 333826a179..12eb905112 100644
+--- a/crates/rust-analyzer/src/lsp/from_proto.rs
++++ b/crates/rust-analyzer/src/lsp/from_proto.rs
+@@ -6,6 +6,8 @@ use paths::Utf8PathBuf;
+ use syntax::{TextRange, TextSize};
+ use vfs::AbsPathBuf;
+ 
++#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++use crate::lsp::wasm_file_url::WasmFileUrlExt as _;
+ use crate::{
+     global_state::GlobalStateSnapshot,
+     line_index::{LineIndex, PositionEncoding},
+diff --git a/crates/rust-analyzer/src/lsp/to_proto.rs b/crates/rust-analyzer/src/lsp/to_proto.rs
+index d59e9d8434..5ed6e4bd40 100644
+--- a/crates/rust-analyzer/src/lsp/to_proto.rs
++++ b/crates/rust-analyzer/src/lsp/to_proto.rs
+@@ -25,6 +25,8 @@ use semver::VersionReq;
+ use serde_json::to_value;
+ use vfs::AbsPath;
+ 
++#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++use crate::lsp::wasm_file_url::WasmFileUrlExt as _;
+ use crate::{
+     config::{CallInfoConfig, ClientCommandsConfig, Config},
+     global_state::GlobalStateSnapshot,
+diff --git a/crates/rust-analyzer/src/lsp/wasm_file_url.rs b/crates/rust-analyzer/src/lsp/wasm_file_url.rs
+new file mode 100644
+index 0000000000..25d2e7a499
+--- /dev/null
++++ b/crates/rust-analyzer/src/lsp/wasm_file_url.rs
+@@ -0,0 +1,82 @@
++use std::path::{Path, PathBuf};
++
++use lsp_types::Url;
++
++pub trait WasmFileUrlExt {
++    fn from_file_path<P: AsRef<Path>>(path: P) -> Result<Url, ()>;
++    fn to_file_path(&self) -> Result<PathBuf, ()>;
++}
++
++impl WasmFileUrlExt for Url {
++    fn from_file_path<P: AsRef<Path>>(path: P) -> Result<Url, ()> {
++        let path = path.as_ref();
++        if !path.is_absolute() {
++            return Err(());
++        }
++
++        let path = path.to_str().ok_or(())?;
++        Url::parse(&format!("file://{}", encode_file_path(path))).map_err(|_| ())
++    }
++
++    fn to_file_path(&self) -> Result<PathBuf, ()> {
++        match self.host_str() {
++            None | Some("") | Some("localhost") => (),
++            Some(_) => return Err(()),
++        }
++
++        let path = decode_file_path(self.path()).ok_or(())?;
++        let path = PathBuf::from(path);
++        path.is_absolute().then_some(path).ok_or(())
++    }
++}
++
++fn encode_file_path(path: &str) -> String {
++    let mut encoded = String::with_capacity(path.len());
++    for byte in path.bytes() {
++        match byte {
++            b'/' | b':' | b'-' | b'.' | b'_' | b'~' | b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' => {
++                encoded.push(byte as char);
++            }
++            _ => {
++                encoded.push('%');
++                encoded.push(hex(byte >> 4));
++                encoded.push(hex(byte & 0x0f));
++            }
++        }
++    }
++    encoded
++}
++
++fn decode_file_path(path: &str) -> Option<String> {
++    let mut bytes = Vec::with_capacity(path.len());
++    let mut iter = path.bytes();
++    while let Some(byte) = iter.next() {
++        if byte != b'%' {
++            bytes.push(byte);
++            continue;
++        }
++
++        let high = unhex(iter.next()?)?;
++        let low = unhex(iter.next()?)?;
++        bytes.push((high << 4) | low);
++    }
++
++    String::from_utf8(bytes).ok()
++}
++
++fn hex(nibble: u8) -> char {
++    match nibble {
++        0..=9 => (b'0' + nibble) as char,
++        10..=15 => (b'A' + nibble - 10) as char,
++        _ => unreachable!(),
++    }
++}
++
++fn unhex(byte: u8) -> Option<u8> {
++    match byte {
++        b'0'..=b'9' => Some(byte - b'0'),
++        b'a'..=b'f' => Some(byte - b'a' + 10),
++        b'A'..=b'F' => Some(byte - b'A' + 10),
++        _ => None,
++    }
++}
+diff --git a/crates/rust-analyzer/src/reload.rs b/crates/rust-analyzer/src/reload.rs
+index 74fd0e6533..e0072f3033 100644
+--- a/crates/rust-analyzer/src/reload.rs
++++ b/crates/rust-analyzer/src/reload.rs
+@@ -32,6 +32,8 @@ use stdx::{format_to, thread::ThreadIntent};
+ use triomphe::Arc;
+ use vfs::{AbsPath, AbsPathBuf, ChangeKind};
+ 
++#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++use crate::lsp::wasm_file_url::WasmFileUrlExt as _;
+ use crate::{
+     config::{Config, FilesWatcher, LinkedProject},
+     flycheck::{FlycheckConfig, FlycheckHandle},
+diff --git a/crates/toolchain/Cargo.toml b/crates/toolchain/Cargo.toml
+index f561c1c0e2..b84b9bdd58 100644
+--- a/crates/toolchain/Cargo.toml
++++ b/crates/toolchain/Cargo.toml
+@@ -13,8 +13,10 @@ rust-version.workspace = true
+ doctest = false
+ 
+ [dependencies]
+-home = "0.5.11"
+ camino.workspace = true
+ 
++[target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
++home = "0.5.11"
++
+ [lints]
+ workspace = true
+diff --git a/crates/toolchain/src/lib.rs b/crates/toolchain/src/lib.rs
+index 39319886cf..ce200fa726 100644
+--- a/crates/toolchain/src/lib.rs
++++ b/crates/toolchain/src/lib.rs
+@@ -119,12 +119,18 @@ fn get_cargo_home() -> Option<Utf8PathBuf> {
+         return Utf8PathBuf::try_from(PathBuf::from(path)).ok();
+     }
+ 
++    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++    {
++        None
++    }
++
++    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+     if let Some(mut path) = home::home_dir() {
+         path.push(".cargo");
+-        return Utf8PathBuf::try_from(path).ok();
++        Utf8PathBuf::try_from(path).ok()
++    } else {
++        None
+     }
+-
+-    None
+ }
+ 
+ fn lookup_in_path(exec: &str) -> Option<Utf8PathBuf> {
+-- 
+2.54.0
+
