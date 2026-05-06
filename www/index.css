@@ -1,5 +1,78 @@
+html, body { margin: 0; padding: 0; }
 body {
-    width: calc(100vw - 1px);
-    height: calc(100vh - 1px);
-    margin: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
 }
+
+#editor {
+    position: absolute;
+    inset: 0;
+}
+
+#ra-status {
+    position: fixed;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    padding: 6px 14px;
+    background: rgba(30, 30, 30, 0.92);
+    color: #ddd;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 12px;
+    border-radius: 999px;
+    border: 1px solid #444;
+    transition: opacity 250ms;
+    pointer-events: none;
+}
+#ra-status.hidden { opacity: 0; }
+
+#ra-settings-toggle {
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    z-index: 1001;
+    padding: 6px 12px;
+    background: rgba(30, 30, 30, 0.92);
+    color: #ddd;
+    border: 1px solid #444;
+    border-radius: 6px;
+    cursor: pointer;
+    font: 12px/1 -apple-system, BlinkMacSystemFont, sans-serif;
+}
+#ra-settings-toggle:hover { background: #2a2d2e; }
+
+#ra-settings {
+    position: fixed;
+    top: 40px;
+    right: 8px;
+    z-index: 1001;
+    width: 260px;
+    padding: 12px 14px;
+    background: rgba(30, 30, 30, 0.97);
+    color: #ddd;
+    border: 1px solid #444;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    font: 12px/1.45 -apple-system, BlinkMacSystemFont, sans-serif;
+    display: none;
+}
+#ra-settings.open { display: block; }
+#ra-settings h3 {
+    margin: 0 0 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #888;
+    font-weight: 600;
+}
+#ra-settings h3:not(:first-child) { margin-top: 12px; }
+#ra-settings label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    cursor: pointer;
+}
+#ra-settings input[type=checkbox] { accent-color: #569cd6; }
