@@ -65,7 +65,7 @@ const setStatus = (msg) => {
 };
 
 // Worker proxy
-const createRA = () => new Promise((resolve) => {
+const createRA = () => new Promise((resolve, reject) => {
     const worker = new Worker(new URL('./ra-worker.js', import.meta.url));
     const pending = {};
     let id = 1;
@@ -80,8 +80,18 @@ const createRA = () => new Promise((resolve) => {
         get: (_t, prop, _r) => (...args) => call(prop, ...args),
     });
 
+    worker.onerror = (ev) => {
+        console.error('ra-worker uncaught error', ev);
+        setStatus('Worker error — see console');
+        reject(new Error(ev.message || 'worker error'));
+    };
     worker.onmessage = (e) => {
         if (e.data.id === 'ra-worker-ready') return resolve(proxy);
+        if (e.data.id === 'ra-worker-error') {
+            console.error('ra-worker init error:', e.data.error);
+            setStatus('Worker init failed — see console');
+            return reject(new Error(e.data.error));
+        }
         const p = pending[e.data.id];
         if (!p) return;
         delete pending[e.data.id];
