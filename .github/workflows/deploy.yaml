@@ -6,9 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
@@ -27,6 +25,9 @@ jobs:
           rustup update stable
           rustup default stable
           rustup target add wasm32-unknown-unknown
+          rustup component add rust-src
+          # rust-pack reads the source of std/core/alloc out of the sysroot
+          rustc --print sysroot
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -61,16 +62,16 @@ jobs:
           npm ci
           npm run build
 
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: www/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v5
+      - name: Deploy to gh-pages branch
+        run: |
+          touch www/dist/.nojekyll
+          cd www/dist
+          git init -q -b gh-pages
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git commit -q -m "Deploy ${GITHUB_SHA::7}"
+          git push -fq origin gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
