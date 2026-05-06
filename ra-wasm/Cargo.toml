@@ -1,0 +1,35 @@
+[package]
+name = "wasm_demo"
+version = "0.1.0"
+authors = ["rust-analyzer developers"]
+edition = "2024"
+rust-version = "1.95"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+console_error_panic_hook = "0.1"
+log = { version = "0.4", features = ["release_max_level_warn"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_repr = "0.1"
+serde-wasm-bindgen = "0.6"
+stacker = "0.1"
+wasm-bindgen = "0.2"
+
+base-db = { path = "../vendor/rust-analyzer/crates/base-db" }
+cfg = { path = "../vendor/rust-analyzer/crates/cfg" }
+hir = { path = "../vendor/rust-analyzer/crates/hir" }
+ide = { path = "../vendor/rust-analyzer/crates/ide" }
+ide-db = { path = "../vendor/rust-analyzer/crates/ide-db" }
+ide-completion = { path = "../vendor/rust-analyzer/crates/ide-completion" }
+intern = { path = "../vendor/rust-analyzer/crates/intern" }
+span = { path = "../vendor/rust-analyzer/crates/span" }
+syntax = { path = "../vendor/rust-analyzer/crates/syntax" }
+triomphe = "0.1"
+vfs = { path = "../vendor/rust-analyzer/crates/vfs" }
+
+[package.metadata.wasm-pack.profile.profiling]
+wasm-opt = false

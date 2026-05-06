@@ -1,0 +1,4 @@
+[submodule "vendor/rust-analyzer"]
+	path = vendor/rust-analyzer
+	url = https://github.com/CGMossa/rust-analyzer.git
+	branch = wasm

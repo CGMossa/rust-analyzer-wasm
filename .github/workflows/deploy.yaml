@@ -1,0 +1,73 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up Rust (stable)
+        run: rustup target add wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ra-wasm
+            rust-pack
+            vendor/rust-analyzer
+
+      - name: Install wasm-bindgen-cli
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli
+
+      - name: Generate fake sysroot
+        working-directory: rust-pack
+        run: cargo run --release
+
+      - name: Build wasm (release)
+        working-directory: ra-wasm
+        run: |
+          cargo build --target wasm32-unknown-unknown --release
+          wasm-bindgen --target web --out-dir pkg --out-name wasm_demo \
+            target/wasm32-unknown-unknown/release/wasm_demo.wasm
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Build site
+        working-directory: www
+        run: |
+          npm ci
+          npm run build
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: www/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
