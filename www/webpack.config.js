@@ -26,7 +26,7 @@ module.exports = {
             },
             {
                 test: /\.rs$/,
-                use: ['raw-loader'],
+                type: "asset/source",
             },
             {
                 test: /\.ttf$/,

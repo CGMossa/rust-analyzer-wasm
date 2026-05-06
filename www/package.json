@@ -9,9 +9,7 @@
   "author": "rust-analyzer developers",
   "license": "(MIT OR Apache-2.0)",
   "dependencies": {
-    "monaco-editor": "^0.27.0",
-    "raw-loader": "^4.0.2",
-    "text-encoding": "^0.7.0"
+    "monaco-editor": "^0.55.0"
   },
   "devDependencies": {
     "css-loader": "^7.1.4",
