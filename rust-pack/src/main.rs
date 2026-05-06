@@ -172,14 +172,23 @@ fn main() {
         .expect("Failed to execute rustc")
         .stdout;
     let sysroot = std::str::from_utf8(&rustc_result).expect("rustc output wasn't utf8");
+    // Resolve www/ relative to the crate's source dir so the output path is
+    // independent of cwd (cargo run --manifest-path or `cd` invocation
+    // both work).
+    let www_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("rust-pack is one level inside the workspace")
+        .join("www");
+    fs::create_dir_all(&www_dir).expect("create www/");
     for what in &["std", "alloc", "core"] {
         let path_string =
             &format!("{}/lib/rustlib/src/rust/library/{}/src/lib.rs", sysroot.trim(), what);
         let path = Path::new(&path_string);
-        let output_path = format!("../www/fake_{}.rs", what);
+        let output_path = www_dir.join(format!("fake_{}.rs", what));
         let mut output = String::default();
         put_module_in_string(&mut output, path, 0, 4000).unwrap();
         //FIXME: add it when ready: output = remove_function_body(&output);
-        fs::write(output_path, output.clone()).unwrap();
+        fs::write(&output_path, output.clone())
+            .unwrap_or_else(|e| panic!("write {}: {}", output_path.display(), e));
     }
 }
