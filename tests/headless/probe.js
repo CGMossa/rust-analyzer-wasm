@@ -7,7 +7,10 @@ import puppeteer from 'puppeteer';
 const url = process.argv[2] || 'http://127.0.0.1:8090/';
 const timeout = (Number(process.argv[3]) || 60) * 1000;
 
-const browser = await puppeteer.launch({ headless: 'new' });
+const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+});
 const page = await browser.newPage();
 
 const logs = [];

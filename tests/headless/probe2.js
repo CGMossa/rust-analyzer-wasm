@@ -5,7 +5,10 @@ import puppeteer from 'puppeteer';
 const url = process.argv[2] || 'http://127.0.0.1:8090/';
 const maxWait = (Number(process.argv[3]) || 90) * 1000;
 
-const browser = await puppeteer.launch({ headless: 'new' });
+const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+});
 const page = await browser.newPage();
 
 const logs = [];
