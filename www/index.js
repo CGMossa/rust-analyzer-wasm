@@ -44,6 +44,55 @@ const FEATURES = [
     { id: 'onTypeFormat',   label: 'On-type formatting',    on: true },
 ];
 
+const EDITOR_OPTIONS = [
+    { id: 'theme',           label: 'Theme',
+      type: 'select', options: [['vscode-dark-plus', 'VS Code Dark+'], ['vs-dark', 'Dark'], ['vs', 'Light'], ['hc-black', 'High Contrast']],
+      default: 'vscode-dark-plus' },
+    { id: 'fontSize',        label: 'Font size', type: 'number', min: 8, max: 28, default: 14 },
+    { id: 'tabSize',         label: 'Tab size',  type: 'number', min: 2, max: 8,  default: 4 },
+    { id: 'wordWrap',        label: 'Word wrap',          type: 'bool', default: false },
+    { id: 'minimap',         label: 'Minimap',            type: 'bool', default: true },
+    { id: 'lineNumbers',     label: 'Line numbers',       type: 'bool', default: true },
+    { id: 'fontLigatures',   label: 'Font ligatures',     type: 'bool', default: true },
+    { id: 'bracketPairs',    label: 'Bracket pair colors',type: 'bool', default: true },
+    { id: 'indentGuides',    label: 'Indent guides',      type: 'bool', default: true },
+    { id: 'stickyScroll',    label: 'Sticky scroll',      type: 'bool', default: true },
+    { id: 'smoothScroll',    label: 'Smooth scrolling',   type: 'bool', default: true },
+    { id: 'smoothCaret',     label: 'Smooth caret',       type: 'bool', default: true },
+    { id: 'formatOnType',    label: 'Format on type',     type: 'bool', default: true },
+    { id: 'lightbulb',       label: 'Lightbulb (assists)',type: 'bool', default: true },
+    { id: 'whitespace',      label: 'Render whitespace',  type: 'bool', default: false },
+];
+
+const loadEditorOpts = () => {
+    try {
+        const saved = JSON.parse(localStorage.getItem('ra-editor-opts') || '{}');
+        const o = {};
+        for (const f of EDITOR_OPTIONS) o[f.id] = saved[f.id] ?? f.default;
+        return o;
+    } catch { return Object.fromEntries(EDITOR_OPTIONS.map(f => [f.id, f.default])); }
+};
+const saveEditorOpts = (o) => localStorage.setItem('ra-editor-opts', JSON.stringify(o));
+let editorOpts = loadEditorOpts();
+
+const editorOptionsToMonaco = (o) => ({
+    theme: o.theme,
+    fontSize: o.fontSize,
+    tabSize: o.tabSize,
+    wordWrap: o.wordWrap ? 'on' : 'off',
+    minimap: { enabled: o.minimap },
+    lineNumbers: o.lineNumbers ? 'on' : 'off',
+    fontLigatures: o.fontLigatures,
+    bracketPairColorization: { enabled: o.bracketPairs },
+    guides: { bracketPairs: o.bracketPairs, indentation: o.indentGuides },
+    stickyScroll: { enabled: o.stickyScroll },
+    smoothScrolling: o.smoothScroll,
+    cursorSmoothCaretAnimation: o.smoothCaret ? 'on' : 'off',
+    formatOnType: o.formatOnType,
+    lightbulb: { enabled: o.lightbulb ? 'on' : 'off' },
+    renderWhitespace: o.whitespace ? 'all' : 'selection',
+});
+
 const loadSettings = () => {
     try {
         const saved = JSON.parse(localStorage.getItem('ra-settings') || '{}');
@@ -271,12 +320,27 @@ const registerRA = () => {
     }));
 };
 
-const buildSettingsPanel = (model) => {
+const buildSettingsPanel = (model, editor) => {
     const root = document.createElement('div');
     root.id = 'ra-settings';
+
+    const renderEditorOption = (f) => {
+        if (f.type === 'bool') {
+            return `<label><input type="checkbox" data-eid="${f.id}" ${editorOpts[f.id] ? 'checked' : ''}> ${f.label}</label>`;
+        }
+        if (f.type === 'number') {
+            return `<label>${f.label} <input type="number" data-eid="${f.id}" min="${f.min}" max="${f.max}" value="${editorOpts[f.id]}" style="width:48px;margin-left:auto"></label>`;
+        }
+        if (f.type === 'select') {
+            const opts = f.options.map(([v, l]) => `<option value="${v}" ${editorOpts[f.id] === v ? 'selected' : ''}>${l}</option>`).join('');
+            return `<label>${f.label} <select data-eid="${f.id}" style="margin-left:auto;background:#222;color:#ddd;border:1px solid #444;border-radius:4px">${opts}</select></label>`;
+        }
+        return '';
+    };
+
     root.innerHTML = `<h3>Language features</h3>` + FEATURES.map(f =>
         `<label><input type="checkbox" data-id="${f.id}" ${enabled(f.id) ? 'checked' : ''}> ${f.label}</label>`
-    ).join('');
+    ).join('') + `<h3>Editor</h3>` + EDITOR_OPTIONS.map(renderEditorOption).join('');
     document.body.appendChild(root);
 
     const toggle = document.createElement('button');
@@ -289,18 +353,31 @@ const buildSettingsPanel = (model) => {
         if (!root.contains(e.target) && e.target !== toggle) root.classList.remove('open');
     });
 
-    root.addEventListener('change', (e) => {
-        const cb = e.target;
-        if (cb.tagName !== 'INPUT') return;
-        settings[cb.dataset.id] = cb.checked;
-        saveSettings(settings);
-        // Force Monaco to re-query providers (e.g. for diagnostics, inlayHints).
-        if (cb.dataset.id === 'diagnostics' && !cb.checked) {
-            monaco.editor.setModelMarkers(model, modeId, []);
-        } else if (cb.dataset.id === 'diagnostics' && cb.checked) {
-            update();
+    const onChange = (e) => {
+        const el = e.target;
+        if (el.dataset.id) {
+            settings[el.dataset.id] = el.checked;
+            saveSettings(settings);
+            if (el.dataset.id === 'diagnostics' && !el.checked) {
+                monaco.editor.setModelMarkers(model, modeId, []);
+            } else if (el.dataset.id === 'diagnostics' && el.checked) {
+                update();
+            }
+        } else if (el.dataset.eid) {
+            const id = el.dataset.eid;
+            const opt = EDITOR_OPTIONS.find(o => o.id === id);
+            let v;
+            if (opt.type === 'bool') v = el.checked;
+            else if (opt.type === 'number') v = Number(el.value);
+            else v = el.value;
+            editorOpts[id] = v;
+            saveEditorOpts(editorOpts);
+            if (id === 'theme') monaco.editor.setTheme(v);
+            else editor.updateOptions(editorOptionsToMonaco(editorOpts));
         }
-    });
+    };
+    root.addEventListener('change', onChange);
+    root.addEventListener('input', onChange);
 };
 
 const start = async () => {
@@ -331,28 +408,18 @@ const start = async () => {
     status.textContent = 'Loading rust-analyzer (wasm)…';
     document.body.appendChild(status);
 
-    buildSettingsPanel(model);
-
     const editor = monaco.editor.create(host, {
-        theme: 'vscode-dark-plus',
         model,
         automaticLayout: true,
         inlayHints: { enabled: 'on' },
-        bracketPairColorization: { enabled: true },
-        guides: { bracketPairs: true, indentation: true },
-        renderWhitespace: 'selection',
-        smoothScrolling: true,
         cursorBlinking: 'smooth',
-        cursorSmoothCaretAnimation: 'on',
-        formatOnType: true,
         suggest: { showStatusBar: true, preview: true, previewMode: 'subwordSmart' },
-        fontLigatures: true,
-        minimap: { enabled: true, renderCharacters: false },
-        lightbulb: { enabled: 'on' },
         quickSuggestions: { other: true, comments: false, strings: false },
         suggestOnTriggerCharacters: true,
+        ...editorOptionsToMonaco(editorOpts),
     });
     window.onresize = () => editor.layout();
+    buildSettingsPanel(model, editor);
 
     setStatus('Spawning analyzer worker…');
     state = await createRA();
