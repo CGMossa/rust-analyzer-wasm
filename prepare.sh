@@ -14,13 +14,10 @@ if [ -f "crates/rust-analyzer/src/lsp/wasm_file_url.rs" ]; then
     exit 0
 fi
 
-# git am needs a committer identity; set one locally if missing.
-if ! git config user.email > /dev/null 2>&1; then
-    git config user.email "noreply@example.com"
-    git config user.name  "wasm-patch"
-fi
-
+# Pass identity inline so it works regardless of repo/global config state.
 echo "Applying wasm patches to vendor/rust-analyzer ..."
-git am --keep-cr "$PATCH_DIR"/0001-wasm-compile.patch
-git am --keep-cr "$PATCH_DIR"/0002-wasm-paths-absolute.patch
+GIT_COMMITTER_NAME="wasm-patch"   GIT_AUTHOR_NAME="wasm-patch"   \
+GIT_COMMITTER_EMAIL="patch@local" GIT_AUTHOR_EMAIL="patch@local" \
+    git -c user.name="wasm-patch" -c user.email="patch@local" \
+        am --keep-cr "$PATCH_DIR"/*.patch
 echo "Done."
