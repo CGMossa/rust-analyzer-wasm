@@ -126,7 +126,17 @@ const createRA = () => new Promise((resolve, reject) => {
     });
 
     const proxy = new Proxy({}, {
-        get: (_t, prop, _r) => (...args) => call(prop, ...args),
+        get: (target, prop, receiver) => {
+            // Don't make this proxy look like a thenable: when Promise.resolve
+            // unwraps it, the engine reads `.then` and tries to call it with
+            // (onFulfilled, onRejected). Those are functions, structured
+            // clone refuses to send them to the worker, and the whole
+            // bootstrap explodes with "Function object could not be cloned".
+            if (prop === 'then' || typeof prop === 'symbol') {
+                return Reflect.get(target, prop, receiver);
+            }
+            return (...args) => call(prop, ...args);
+        },
     });
 
     worker.onerror = (ev) => {
