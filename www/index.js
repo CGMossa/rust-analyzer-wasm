@@ -227,6 +227,9 @@ const registerRA = () => {
             for (const h of hints) {
                 if (!h || !h.label) continue;
                 const isParam = h.hint_type === 2;
+                // rust-analyzer's `render_colons: true` already includes the
+                // colon in the label (`: T` / `name:` / `&*`), so we use
+                // h.label directly.
                 out.push({
                     kind: isParam
                         ? monaco.languages.InlayHintKind.Parameter
@@ -234,7 +237,7 @@ const registerRA = () => {
                     position: isParam
                         ? { lineNumber: h.range.startLineNumber, column: h.range.startColumn }
                         : { lineNumber: h.range.endLineNumber, column: h.range.endColumn },
-                    label: isParam ? `${h.label}:` : `: ${h.label}`,
+                    label: h.label,
                     paddingLeft: !isParam,
                     paddingRight: isParam,
                 });
