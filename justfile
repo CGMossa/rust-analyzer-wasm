@@ -21,9 +21,8 @@ prepare:
 # ── Build steps ──────────────────────────────────────────────────────────────
 
 # Build fake_{std,core,alloc}.rs from the host sysroot into www/
-# rust-pack writes ../www/fake_*.rs relative to its own dir, so cd first.
 sysroot:
-    cd rust-pack && cargo run --release
+    cargo run --release --manifest-path rust-pack/Cargo.toml
 
 # Compile ra-wasm to wasm32-unknown-unknown and run wasm-bindgen
 wasm:
