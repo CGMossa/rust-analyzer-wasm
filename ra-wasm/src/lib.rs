@@ -15,7 +15,8 @@ use ide::{
     CompletionFieldsToResolve, DiagnosticsConfig, DiscriminantHints, ExprFillDefaultMode, FileId,
     FilePosition, FileStructureConfig, FindAllRefsConfig, GenericParameterHints,
     GotoDefinitionConfig, GotoImplementationConfig, HighlightConfig, HoverConfig, HoverDocFormat,
-    Indel, InlayFieldsToResolve, InlayHintsConfig, InlayKind, LifetimeElisionHints,
+    Indel, InlayFieldsToResolve, InlayHintPosition as IdeInlayHintPosition, InlayHintsConfig,
+    InlayKind, LifetimeElisionHints,
     RaFixtureConfig, RenameConfig, SourceRoot, SubstTyLen, TextSize, TypeHintsPlacement,
 };
 use ide_db::{
@@ -388,11 +389,18 @@ impl WorldState {
             .map(|ih| InlayHint {
                 label: Some(ih.label.to_string()),
                 hint_type: match ih.kind {
-                    InlayKind::Type | InlayKind::Chaining => InlayHintType::Type,
-                    InlayKind::Parameter => InlayHintType::Parameter,
+                    InlayKind::Parameter | InlayKind::GenericParameter => {
+                        InlayHintType::Parameter
+                    }
                     _ => InlayHintType::Type,
                 },
                 range: to_proto::text_range(ih.range, &line_index),
+                position: match ih.position {
+                    IdeInlayHintPosition::Before => InlayHintPosition::Before,
+                    IdeInlayHintPosition::After => InlayHintPosition::After,
+                },
+                pad_left: ih.pad_left,
+                pad_right: ih.pad_right,
             })
             .collect();
         serde_wasm_bindgen::to_value(&results).unwrap()

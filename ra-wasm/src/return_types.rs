@@ -46,11 +46,21 @@ pub enum InlayHintType {
     Parameter = 2,
 }
 
+#[derive(Serialize_repr)]
+#[repr(u8)]
+pub enum InlayHintPosition {
+    Before = 1,
+    After = 2,
+}
+
 #[derive(Serialize)]
 pub struct InlayHint {
     pub label: Option<String>,
     pub hint_type: InlayHintType,
     pub range: Range,
+    pub position: InlayHintPosition,
+    pub pad_left: bool,
+    pub pad_right: bool,
 }
 
 #[derive(Serialize)]
